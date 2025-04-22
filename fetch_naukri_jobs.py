@@ -13,7 +13,7 @@ import telegram
 FILTERS = {
     "keywords": "java",
     "experience": 0,
-    "posted_within_hours": 1,
+    "posted_within_days": 1,
     "location": ["Remote", "Bengaluru", "Hyderabad", "India"],
     "job_type": ["Internship", "Full Time", "Job"],
 }
