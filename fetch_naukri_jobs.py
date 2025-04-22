@@ -18,7 +18,7 @@ FILTERS = {
     "job_type": ["Internship", "Full Time"],
 }
 
-NAUKRI_URL = f"https://www.naukri.com/{FILTERS['keywords']}-jobs?experience={FILTERS['experience']}&jobAge=0"
+NAUKRI_URL = f"https://www.naukri.com/{FILTERS['keywords']}-jobs?experience={FILTERS['experience']}&jobAge=1"
 CSV_FILE = "jobs.csv"
 
 headers = {
