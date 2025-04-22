@@ -14,8 +14,8 @@ FILTERS = {
     "keywords": "java",
     "experience": 0,
     "posted_within_hours": 1,
-    "location": ["Remote", "Bengaluru", "Hyderabad"],
-    "job_type": ["Internship", "Full Time"],
+    "location": ["Remote", "Bengaluru", "Hyderabad", "India"],
+    "job_type": ["Internship", "Full Time", "Job"],
 }
 
 NAUKRI_URL = f"https://www.naukri.com/{FILTERS['keywords']}-jobs?experience={FILTERS['experience']}&jobAge=1"
