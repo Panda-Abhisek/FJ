@@ -4,7 +4,7 @@ import csv
 import os
 import smtplib
 from email.message import EmailMessage
-import telegram
+import telegram # type: ignore
 
 # === CONFIG ===
 EMAIL_USER = os.getenv("EMAIL_USER")
@@ -15,7 +15,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # === SCRAPE LOGIC ===
 def fetch_java_jobs():
-    url = "https://www.naukri.com/java-jobs?k=java&experience=0"
+    url = "https://www.naukri.com/java-jobs?k=java&experience=0&functionAreaIdGid=5&glbl_qcrc=1028&ugTypeGid=12&industryTypeIdGid=109&jobAge=1"
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
