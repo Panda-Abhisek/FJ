@@ -1,94 +1,84 @@
 import requests
 from bs4 import BeautifulSoup
 import csv
-from datetime import datetime
 import os
 import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
+from email.message import EmailMessage
 import telegram
 
-# --- Configurable Filters ---
-FILTERS = {
-    "keywords": "java",
-    "experience": 0,
-    "posted_within_days": 1,
-    "location": ["Remote", "Bengaluru", "Hyderabad", "India"],
-    "job_type": ["Internship", "Full Time", "Job"],
-}
+# === CONFIG ===
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_TO = os.getenv("EMAIL_TO")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-NAUKRI_URL = f"https://www.naukri.com/{FILTERS['keywords']}-jobs?experience={FILTERS['experience']}&jobAge=1"
-CSV_FILE = "jobs.csv"
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36"
-}
-
-def fetch_jobs():
-    response = requests.get(NAUKRI_URL, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
+# === SCRAPE LOGIC ===
+def fetch_java_jobs():
+    url = "https://www.naukri.com/java-jobs?k=java&experience=0"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
+    job_cards = soup.find_all("article", class_="jobTuple")
 
     jobs = []
-    for job_card in soup.select(".jobTuple"):
-        title = job_card.select_one(".title.fw500").get_text(strip=True)
-        company = job_card.select_one(".subTitle.ellipsis.fleft").get_text(strip=True)
-        location = job_card.select_one(".locWdth").get_text(strip=True)
-        posted = job_card.select_one(".type.br2.fleft.grey").get_text(strip=True)
-        link = job_card.select_one("a.title.fw500")['href']
+    for card in job_cards:
+        title = card.find("a", class_="title")
+        company = card.find("a", class_="subTitle")
+        location = card.find("li", class_="location")
+        posted = card.find("span", class_="fleft postedDate")
+        link = title["href"] if title else ""
 
-        if any(loc.lower() in location.lower() for loc in FILTERS["location"]):
-            jobs.append({
-                "Title": title,
-                "Company": company,
-                "Location": location,
-                "Posted": posted,
-                "Link": link
-            })
+        jobs.append({
+            "Title": title.text.strip() if title else "",
+            "Company": company.text.strip() if company else "",
+            "Location": location.text.strip() if location else "",
+            "Posted": posted.text.strip() if posted else "",
+            "Link": link
+        })
 
     return jobs
 
-def save_to_csv(jobs):
-    with open(CSV_FILE, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["Title", "Company", "Location", "Posted", "Link"])
+# === CSV CREATOR ===
+def save_to_csv(jobs, filename="jobs.csv"):
+    with open(filename, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=jobs[0].keys())
         writer.writeheader()
-        for job in jobs:
-            writer.writerow(job)
+        writer.writerows(jobs)
+    print(f"[INFO] Saved {len(jobs)} jobs to {filename}")
 
-def send_email():
-    from_addr = os.environ['EMAIL_USER']
-    to_addr = os.environ['EMAIL_TO']
-    msg = MIMEMultipart()
-    msg['From'] = from_addr
-    msg['To'] = to_addr
-    msg['Subject'] = "Daily Java Jobs for Freshers"
+# === EMAIL SENDER ===
+def send_email(filename):
+    msg = EmailMessage()
+    msg["Subject"] = "Daily Java Fresher Jobs - Naukri"
+    msg["From"] = EMAIL_USER
+    msg["To"] = EMAIL_TO
+    msg.set_content("Find attached the latest Java fresher jobs from Naukri.")
 
-    with open(CSV_FILE, "rb") as f:
-        part = MIMEBase('application', 'octet-stream')
-        part.set_payload(f.read())
-        encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename={CSV_FILE}')
-        msg.attach(part)
+    with open(filename, "rb") as f:
+        msg.add_attachment(f.read(), maintype="application", subtype="octet-stream", filename=filename)
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(from_addr, os.environ['EMAIL_PASS'])
-        server.send_message(msg)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(EMAIL_USER, EMAIL_PASS)
+        smtp.send_message(msg)
+    print(f"[INFO] Sent CSV to {EMAIL_TO}")
 
-def send_telegram(jobs):
-    bot = telegram.Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
-    chat_id = os.environ['TELEGRAM_CHAT_ID']
-    message = "\U0001F4CC *Today's Java Jobs (Freshers)*\n\n"
+# === TELEGRAM BOT ===
+def send_telegram_links(jobs):
+    bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
+    for job in jobs[:10]:  # Send top 10 to avoid spam
+        msg = f"{job['Title']} at {job['Company']}\n{job['Location']} | {job['Posted']}\n{job['Link']}"
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
+    print(f"[INFO] Sent job links via Telegram")
 
-    for job in jobs[:10]:
-        message += f"\n[{job['Title']}]({job['Link']}) - {job['Company']} ({job['Location']})\nPosted: {job['Posted']}\n"
-
-    bot.send_message(chat_id=chat_id, text=message, parse_mode=telegram.ParseMode.MARKDOWN)
-
+# === MAIN ===
 if __name__ == "__main__":
-    jobs = fetch_jobs()
+    jobs = fetch_java_jobs()
     if jobs:
         save_to_csv(jobs)
-        send_email()
-        send_telegram(jobs)
+        send_email("jobs.csv")
+        send_telegram_links(jobs)
     else:
         print("No jobs found matching the filters.")
